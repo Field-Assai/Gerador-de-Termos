@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gerador de Termos | Sistema Unificado</title>
+    <link rel="stylesheet" href="./style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="app" class="app-layout">
+      
+      <!-- PAINEL ESQUERDO: REGISTRO DE HISTÓRICO -->
+      <aside class="glass-panel history-panel" id="historyPanel" style="display: none;">
+        <h2 class="history-title">📂 Histórico Recente</h2>
+        <p class="history-subtitle">Registros gerados nesta sessão:</p>
+        <div class="history-list" id="historyList">
+          <!-- Os cards de histórico serão injetados aqui -->
+        </div>
+      </aside>
+
+      <!-- PAINEL DIREITO: FORMULÁRIO -->
+      <main class="glass-panel form-panel">
+        <header>
+          <div class="icon-container">📝</div>
+          <h1>SISTEMA UNIFICADO DE TERMOS</h1>
+          <p class="subtitle">Gerador de Termos de Entrega e Devolução</p>
+          <div class="date-badge" id="dateDisplay">
+            📅 Data atual: <span id="currentDateString"></span>
+          </div>
+        </header>
+
+        <form id="termForm">
+          <div class="form-group row">
+            <div class="input-col">
+              <label for="tipoTermo">Tipo de Termo:</label>
+              <select id="tipoTermo" required>
+                <option value="Entrega" selected>Entrega</option>
+                <option value="Devolução">Devolução</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="nome">Nome do Usuário:</label>
+              <input type="text" id="nome" placeholder="Digite o nome completo" required />
+            </div>
+            <div class="form-group">
+              <label for="matricula">Matrícula:</label>
+              <input type="text" id="matricula" placeholder="Digite a matrícula" required />
+            </div>
+            
+            <div class="form-group">
+              <label for="modelo">Modelo:</label>
+              <input type="text" id="modelo" placeholder="Ex: Dell Latitude 5490" required />
+            </div>
+            <div class="form-group">
+              <label for="codigo_interno">Código Interno:</label>
+              <input type="text" id="codigo_interno" placeholder="Código interno do equipamento" required />
+            </div>
+
+            <div class="form-group">
+              <label for="numero_serie">Número de Série:</label>
+              <input type="text" id="numero_serie" placeholder="Número de série do equipamento" required />
+            </div>
+            <div class="form-group">
+              <label for="patrimonio">Patrimônio:</label>
+              <input type="text" id="patrimonio" placeholder="Número do patrimônio" required />
+            </div>
+            
+            <div class="form-group" id="nomeTecnicoContainer" style="display: none;">
+              <label for="nomeTecnico">Técnico que Recebeu:</label>
+              <input type="text" id="nomeTecnico" placeholder="Nome do técnico" />
+            </div>
+          </div>
+
+          <div id="statusAlert" class="status-alert">
+            <span class="icon">📊</span>
+            <span class="text">Preencha todos os campos para gerar o documento.</span>
+          </div>
+
+          <button type="submit" id="submitBtn">
+            <span class="btn-icon">📄</span> GERAR TERMO E BAIXAR
+          </button>
+        </form>
+
+        <div id="successMessage" class="success-message hidden">
+          ✅ Termo gerado com sucesso! Os campos foram limpos.
+        </div>
+      </main>
+
+    </div>
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>
