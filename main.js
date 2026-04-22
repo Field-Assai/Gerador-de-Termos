@@ -169,6 +169,7 @@ async function generateDocx(event) {
     const doc = new Docxtemplater(zip, {
       paragraphLoop: true,
       linebreaks: true,
+      delimiters: { start: '<', end: '>' }
     });
 
     doc.render(formData);
