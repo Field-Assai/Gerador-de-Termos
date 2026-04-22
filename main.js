@@ -208,7 +208,7 @@ async function generateDocx(event) {
           NUMERO_SERIE: document.getElementById('numero_serie_novo').value.trim(),
           PATRIMONIO: document.getElementById('patrimonio_novo').value.trim(),
         };
-        await processDoc('entrega.docx', formDataNovaEntrega, 'Termo de Entrega (Novo Equipamento)');
+        await processDoc('entrega.docx', formDataNovaEntrega, 'Termo de Entrega');
       }
     }
 
