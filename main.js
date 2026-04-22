@@ -41,7 +41,7 @@ tipoTermoDropdown.addEventListener('change', () => {
   if (tipoTermoDropdown.value === 'Devolução') {
     nomeTecnicoContainer.style.display = 'block';
     nomeTecnicoInput.required = true;
-    trocaContainer.style.display = 'block'; // Show Troca option on Devolucao
+    trocaContainer.style.display = 'flex'; // Show Troca option on Devolucao
   } else {
     nomeTecnicoContainer.style.display = 'none';
     nomeTecnicoInput.required = false;
