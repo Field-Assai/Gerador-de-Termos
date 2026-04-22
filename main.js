@@ -27,6 +27,10 @@ const tipoTermoDropdown = document.getElementById('tipoTermo');
 const nomeTecnicoContainer = document.getElementById('nomeTecnicoContainer');
 const nomeTecnicoInput = document.getElementById('nomeTecnico');
 const acessoriosContainer = document.getElementById('acessoriosContainer');
+const trocaContainer = document.getElementById('trocaContainer');
+const checkTroca = document.getElementById('checkTroca');
+const novoEquipamentoGrid = document.getElementById('novoEquipamentoGrid');
+const baseInputsNovo = Array.from(novoEquipamentoGrid.querySelectorAll('input[type="text"]'));
 
 
 // Buscar todos os inputs do tipo text, exceto o do técnico
@@ -37,15 +41,34 @@ tipoTermoDropdown.addEventListener('change', () => {
   if (tipoTermoDropdown.value === 'Devolução') {
     nomeTecnicoContainer.style.display = 'block';
     nomeTecnicoInput.required = true;
-    acessoriosContainer.style.display = 'none'; // Hide acessorios on devolucao
+    trocaContainer.style.display = 'block'; // Show Troca option on Devolucao
   } else {
     nomeTecnicoContainer.style.display = 'none';
     nomeTecnicoInput.required = false;
     nomeTecnicoInput.value = ''; 
-    acessoriosContainer.style.display = 'block'; // Show acessorios on entrega
+    trocaContainer.style.display = 'none';
+    checkTroca.checked = false; // Reset troca
+  }
+  updateTrocaVisibility();
+});
+
+checkTroca.addEventListener('change', updateTrocaVisibility);
+
+function updateTrocaVisibility() {
+  if (tipoTermoDropdown.value === 'Devolução' && checkTroca.checked) {
+    novoEquipamentoGrid.style.display = 'grid';
+    acessoriosContainer.style.display = 'none'; // Keep accessories hidden during exchange
+    baseInputsNovo.forEach(input => input.required = true);
+  } else {
+    novoEquipamentoGrid.style.display = 'none';
+    acessoriosContainer.style.display = tipoTermoDropdown.value === 'Entrega' ? 'block' : 'none';
+    baseInputsNovo.forEach(input => {
+      input.required = false;
+      input.value = '';
+    });
   }
   validateForm();
-});
+}
 
 function validateForm() {
   let requiredCount = baseInputs.length;
@@ -58,6 +81,13 @@ function validateForm() {
   if (tipoTermoDropdown.value === 'Devolução') {
     requiredCount++;
     if (nomeTecnicoInput.value.trim() !== '') filled++;
+    
+    if (checkTroca.checked) {
+      requiredCount += baseInputsNovo.length;
+      baseInputsNovo.forEach(input => {
+        if (input.value.trim() !== '') filled++;
+      });
+    }
   }
   
   if (filled === requiredCount) {
@@ -72,6 +102,9 @@ function validateForm() {
 
 // Add event listeners para tempo real
 baseInputs.forEach(input => {
+  input.addEventListener('input', validateForm);
+});
+baseInputsNovo.forEach(input => {
   input.addEventListener('input', validateForm);
 });
 nomeTecnicoInput.addEventListener('input', validateForm);
@@ -90,14 +123,18 @@ async function generateDocx(event) {
   const tipo = tipoTermoDropdown.value; 
   const nomeArquivoTemplate = tipo === 'Entrega' ? 'entrega.docx' : 'devolucao.docx';
 
+  const isTroca = tipo === 'Devolução' && checkTroca.checked;
+
+  // Acessórios apenas na entrega padrão (não na troca, conforme pedido)
   let acessoriosSelecionados = [];
   if (tipo === 'Entrega') {
     if (document.getElementById('checkMouse').checked) acessoriosSelecionados.push('Mouse');
     if (document.getElementById('checkHeadset').checked) acessoriosSelecionados.push('Headset');
     if (document.getElementById('checkMochila').checked) acessoriosSelecionados.push('Mochila');
   }
-  
-  const formData = {
+
+  // Dados comuns/principais
+  const formDataBase = {
     NOME: document.getElementById('nome').value.trim(),
     MATRICULA: document.getElementById('matricula').value.trim(),
     MODELO: document.getElementById('modelo').value.trim(),
@@ -108,11 +145,10 @@ async function generateDocx(event) {
     DATA: gerarDataPorExtenso()
   };
 
-  try {
-    // Adicionamos um timestamp na URL para forçar o navegador a baixar a versão mais recente e ignorar o cache antigo
-    const response = await fetch(`/${nomeArquivoTemplate}?v=${new Date().getTime()}`);
+  async function processDoc(arquivoTemplate, dadosFormulario, sufixoNome) {
+    const response = await fetch(`/${arquivoTemplate}?v=${new Date().getTime()}`);
     if (!response.ok) {
-      throw new Error(`Não foi possível carregar o modelo '${nomeArquivoTemplate}'. Verifique se ele está na pasta public/ do projeto.`);
+      throw new Error(`Não foi possível carregar o modelo '${arquivoTemplate}'.`);
     }
 
     const blob = await response.blob();
@@ -120,14 +156,10 @@ async function generateDocx(event) {
 
     const zip = new PizZip(arrayBuffer);
 
-    // MÁGICA: Manipular o XML nativo do Word para criar bullet points perfeitos
     let xml = zip.file("word/document.xml").asText();
-    
-    // Remover a tag {ACESSORIOS} que foi adicionada antes para limpar o texto
     xml = xml.replace('{ACESSORIOS}', '');
 
-    if (tipo === 'Entrega' && acessoriosSelecionados.length > 0) {
-      // Template XML de um bullet point padrão retirado do próprio documento
+    if (arquivoTemplate === 'entrega.docx' && acessoriosSelecionados.length > 0) {
       const bulletTemplate = '<w:p><w:pPr><w:pStyle w:val="Standarduser"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="15"/></w:numPr><w:rPr><w:color w:val="000000"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr></w:pPr><w:r><w:rPr><w:color w:val="000000"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr><w:t>REPLACE_TEXTO</w:t></w:r></w:p>';
       
       let extraBullets = '';
@@ -135,7 +167,6 @@ async function generateDocx(event) {
          extraBullets += bulletTemplate.replace('REPLACE_TEXTO', acc);
       });
       
-      // Encontrar onde fica a palavra "Fonte" e inserir logo abaixo
       const fonteIndex = xml.indexOf('<w:t>Fonte</w:t>');
       if (fonteIndex !== -1) {
           const pEndIndex = xml.indexOf('</w:p>', fonteIndex) + 6;
@@ -143,7 +174,6 @@ async function generateDocx(event) {
       }
     }
     
-    // Salva o XML modificado de volta no arquivo Word em memória
     zip.file("word/document.xml", xml);
 
     const doc = new Docxtemplater(zip, {
@@ -151,37 +181,47 @@ async function generateDocx(event) {
       linebreaks: true
     });
 
-    doc.render(formData);
+    doc.render(dadosFormulario);
 
     const out = doc.getZip().generate({
       type: 'blob',
       mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     });
 
-    // Formatar nome de saída
-    const termoStr = tipo === 'Entrega' ? 'Termo de Entrega' : 'Termo de Devolução';
-    const outputName = `${termoStr} - ${formData.MATRICULA}_${formData.NOME}_${formData.NUMERO_SERIE}.docx`;
-
-    // Fazer download
+    const outputName = `${sufixoNome} - ${dadosFormulario.MATRICULA}_${dadosFormulario.NOME}.docx`;
     saveAs(out, outputName);
+  }
 
+  try {
+    if (tipo === 'Entrega') {
+      await processDoc('entrega.docx', formDataBase, 'Termo de Entrega');
+    } else {
+      // Devolução principal
+      await processDoc('devolucao.docx', formDataBase, 'Termo de Devolução');
+      
+      // Se for troca, gerar também o de entrega
+      if (isTroca) {
+        const formDataNovaEntrega = {
+          ...formDataBase,
+          MODELO: document.getElementById('modelo_novo').value.trim(),
+          CODIGO_INTERNO: document.getElementById('codigo_interno_novo').value.trim(),
+          NUMERO_SERIE: document.getElementById('numero_serie_novo').value.trim(),
+          PATRIMONIO: document.getElementById('patrimonio_novo').value.trim(),
+        };
+        await processDoc('entrega.docx', formDataNovaEntrega, 'Termo de Entrega (Novo Equipamento)');
+      }
+    }
 
     // Sucesso - Limpar Form, atualizar validação
     form.reset();
-    
-    if (tipoTermoDropdown.value !== 'Devolução') {
-      nomeTecnicoContainer.style.display = 'none';
-      nomeTecnicoInput.required = false;
-    } else {
-      acessoriosContainer.style.display = 'none';
-    }
+    updateTrocaVisibility();
     
     validateForm();
     successMessage.classList.remove('hidden');
     setTimeout(() => successMessage.classList.add('hidden'), 5000);
 
   } catch (error) {
-    alert(`ERRO: ${error.message}\nCertifique-se de que o arquivo docx está na pasta /public.`);
+    alert(`ERRO: ${error.message}`);
     console.error(error);
   } finally {
     submitBtn.disabled = false;
