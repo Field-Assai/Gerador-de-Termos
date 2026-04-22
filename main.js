@@ -99,7 +99,8 @@ async function generateDocx(event) {
   };
 
   try {
-    const response = await fetch(`/${nomeArquivoTemplate}`);
+    // Adicionamos um timestamp na URL para forçar o navegador a baixar a versão mais recente e ignorar o cache antigo
+    const response = await fetch(`/${nomeArquivoTemplate}?v=${new Date().getTime()}`);
     if (!response.ok) {
       throw new Error(`Não foi possível carregar o modelo '${nomeArquivoTemplate}'. Verifique se ele está na pasta public/ do projeto.`);
     }
