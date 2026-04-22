@@ -82,13 +82,10 @@ header {
 }
 
 .icon-container {
-  font-size: 2rem;
   margin-bottom: 0.5rem;
   display: inline-block;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-  -webkit-background-clip: text;
-  color: transparent;
   animation: float 3s ease-in-out infinite;
+  filter: drop-shadow(0 10px 15px rgba(59, 130, 246, 0.4));
 }
 
 @keyframes float {
