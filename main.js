@@ -68,6 +68,14 @@ function updateTrocaVisibility() {
 }
 
 
+// Auto-formatação para Maiúsculas
+const allTextInputs = document.querySelectorAll('input[type="text"]');
+allTextInputs.forEach(input => {
+  input.addEventListener('input', function() {
+    this.value = this.value.toUpperCase();
+  });
+});
+
 // --- Lógica de Geração do Documento ---
 async function generateDocx(event) {
   event.preventDefault();
