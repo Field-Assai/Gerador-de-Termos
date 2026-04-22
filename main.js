@@ -1,23 +1,10 @@
-import PizZip from 'pizzip';
-import Docxtemplater from 'docxtemplater';
-import { saveAs } from 'file-saver';
-
-
-// --- Mapeamento de Meses ---
-const MESES_PT = [
-  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
-  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"
-];
-
-function gerarDataPorExtenso() {
-  const data = new Date();
-  return `${data.getDate()} de ${MESES_PT[data.getMonth()]} de ${data.getFullYear()}`;
-}
+import { gerarDataPorExtenso } from './utils.js';
+import { processTermos } from './docxService.js';
 
 // --- Atualizar Data na UI ---
 document.getElementById('currentDateString').textContent = gerarDataPorExtenso();
 
-// --- Elementos Básicos ---
+// --- Elementos Básicos de UI ---
 const form = document.getElementById('termForm');
 const successMessage = document.getElementById('successMessage');
 
@@ -30,22 +17,18 @@ const checkTroca = document.getElementById('checkTroca');
 const novoEquipamentoGrid = document.getElementById('novoEquipamentoGrid');
 const baseInputsNovo = Array.from(novoEquipamentoGrid.querySelectorAll('input[type="text"]'));
 
-
-// Buscar todos os inputs do tipo text, exceto o do técnico
-const baseInputs = Array.from(form.querySelectorAll('input[type="text"]:not(#nomeTecnico)'));
-
 // Lógica de exibir/ocultar Técnico e aplicar formatação de preenchimento
 tipoTermoDropdown.addEventListener('change', () => {
   if (tipoTermoDropdown.value === 'Devolução') {
     nomeTecnicoContainer.style.display = 'block';
     nomeTecnicoInput.required = true;
-    trocaContainer.style.display = 'block'; // Show Troca option on Devolucao
+    trocaContainer.style.display = 'block'; // Mostrar checkbox de Troca na Devolucao
   } else {
     nomeTecnicoContainer.style.display = 'none';
     nomeTecnicoInput.required = false;
     nomeTecnicoInput.value = ''; 
     trocaContainer.style.display = 'none';
-    checkTroca.checked = false; // Reset troca
+    checkTroca.checked = false; // Resetar troca
   }
   updateTrocaVisibility();
 });
@@ -55,7 +38,7 @@ checkTroca.addEventListener('change', updateTrocaVisibility);
 function updateTrocaVisibility() {
   if (tipoTermoDropdown.value === 'Devolução' && checkTroca.checked) {
     novoEquipamentoGrid.style.display = 'grid';
-    acessoriosContainer.style.display = 'none'; // Keep accessories hidden during exchange
+    acessoriosContainer.style.display = 'none'; // Ocultar acessórios durante a troca
     baseInputsNovo.forEach(input => input.required = true);
   } else {
     novoEquipamentoGrid.style.display = 'none';
@@ -67,7 +50,6 @@ function updateTrocaVisibility() {
   }
 }
 
-
 // Auto-formatação para Maiúsculas
 const allTextInputs = document.querySelectorAll('input[type="text"]');
 allTextInputs.forEach(input => {
@@ -76,8 +58,8 @@ allTextInputs.forEach(input => {
   });
 });
 
-// --- Lógica de Geração do Documento ---
-async function generateDocx(event) {
+// --- Controlador de Submissão do Formulário ---
+async function handleFormSubmit(event) {
   event.preventDefault();
   successMessage.classList.add('hidden');
   
@@ -86,11 +68,9 @@ async function generateDocx(event) {
   submitBtn.innerHTML = '⏳ GERANDO...';
 
   const tipo = tipoTermoDropdown.value; 
-  const nomeArquivoTemplate = tipo === 'Entrega' ? 'entrega.docx' : 'devolucao.docx';
-
   const isTroca = tipo === 'Devolução' && checkTroca.checked;
 
-  // Acessórios apenas na entrega padrão (não na troca, conforme pedido)
+  // Extrair acessórios selecionados na entrega
   let acessoriosSelecionados = [];
   if (tipo === 'Entrega') {
     if (document.getElementById('checkMouse').checked) acessoriosSelecionados.push('Mouse');
@@ -98,7 +78,7 @@ async function generateDocx(event) {
     if (document.getElementById('checkMochila').checked) acessoriosSelecionados.push('Mochila');
   }
 
-  // Dados comuns/principais
+  // Agrupar dados base do formulário
   const formDataBase = {
     NOME: document.getElementById('nome').value.trim(),
     MATRICULA: document.getElementById('matricula').value.trim(),
@@ -110,74 +90,23 @@ async function generateDocx(event) {
     DATA: gerarDataPorExtenso()
   };
 
-  async function processDoc(arquivoTemplate, dadosFormulario, sufixoNome) {
-    const response = await fetch(`/${arquivoTemplate}?v=${new Date().getTime()}`);
-    if (!response.ok) {
-      throw new Error(`Não foi possível carregar o modelo '${arquivoTemplate}'.`);
-    }
-
-    const blob = await response.blob();
-    const arrayBuffer = await blob.arrayBuffer();
-
-    const zip = new PizZip(arrayBuffer);
-
-    let xml = zip.file("word/document.xml").asText();
-    xml = xml.replace('{ACESSORIOS}', '');
-
-    if (arquivoTemplate === 'entrega.docx' && acessoriosSelecionados.length > 0) {
-      const bulletTemplate = '<w:p><w:pPr><w:pStyle w:val="Standarduser"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="15"/></w:numPr><w:rPr><w:color w:val="000000"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr></w:pPr><w:r><w:rPr><w:color w:val="000000"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr><w:t>REPLACE_TEXTO</w:t></w:r></w:p>';
-      
-      let extraBullets = '';
-      acessoriosSelecionados.forEach(acc => {
-         extraBullets += bulletTemplate.replace('REPLACE_TEXTO', acc);
-      });
-      
-      const fonteIndex = xml.indexOf('<w:t>Fonte</w:t>');
-      if (fonteIndex !== -1) {
-          const pEndIndex = xml.indexOf('</w:p>', fonteIndex) + 6;
-          xml = xml.slice(0, pEndIndex) + extraBullets + xml.slice(pEndIndex);
-      }
-    }
-    
-    zip.file("word/document.xml", xml);
-
-    const doc = new Docxtemplater(zip, {
-      paragraphLoop: true,
-      linebreaks: true
-    });
-
-    doc.render(dadosFormulario);
-
-    const out = doc.getZip().generate({
-      type: 'blob',
-      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    });
-
-    const outputName = `${sufixoNome} - ${dadosFormulario.MATRICULA}_${dadosFormulario.NOME}.docx`;
-    saveAs(out, outputName);
+  // Agrupar dados extras se for uma troca
+  let formDataNovaEntrega = null;
+  if (isTroca) {
+    formDataNovaEntrega = {
+      ...formDataBase,
+      MODELO: document.getElementById('modelo_novo').value.trim(),
+      CODIGO_INTERNO: document.getElementById('codigo_interno_novo').value.trim(),
+      NUMERO_SERIE: document.getElementById('numero_serie_novo').value.trim(),
+      PATRIMONIO: document.getElementById('patrimonio_novo').value.trim(),
+    };
   }
 
   try {
-    if (tipo === 'Entrega') {
-      await processDoc('entrega.docx', formDataBase, 'Termo de Entrega');
-    } else {
-      // Devolução principal
-      await processDoc('devolucao.docx', formDataBase, 'Termo de Devolução');
-      
-      // Se for troca, gerar também o de entrega
-      if (isTroca) {
-        const formDataNovaEntrega = {
-          ...formDataBase,
-          MODELO: document.getElementById('modelo_novo').value.trim(),
-          CODIGO_INTERNO: document.getElementById('codigo_interno_novo').value.trim(),
-          NUMERO_SERIE: document.getElementById('numero_serie_novo').value.trim(),
-          PATRIMONIO: document.getElementById('patrimonio_novo').value.trim(),
-        };
-        await processDoc('entrega.docx', formDataNovaEntrega, 'Termo de Entrega');
-      }
-    }
+    // Delegar a lógica pesada de processamento para o Serviço
+    await processTermos(tipo, isTroca, formDataBase, formDataNovaEntrega, acessoriosSelecionados);
 
-    // Sucesso - Limpar Form, atualizar validação
+    // Sucesso - Limpar Form, atualizar visibilidade
     form.reset();
     updateTrocaVisibility();
     
@@ -193,4 +122,5 @@ async function generateDocx(event) {
   }
 }
 
-form.addEventListener('submit', generateDocx);
+// Acoplar controlador ao formulário
+form.addEventListener('submit', handleFormSubmit);
