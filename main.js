@@ -19,8 +19,6 @@ document.getElementById('currentDateString').textContent = gerarDataPorExtenso()
 
 // --- Elementos Básicos ---
 const form = document.getElementById('termForm');
-const statusAlert = document.getElementById('statusAlert');
-const statusText = statusAlert.querySelector('.text');
 const successMessage = document.getElementById('successMessage');
 
 const tipoTermoDropdown = document.getElementById('tipoTermo');
@@ -67,48 +65,7 @@ function updateTrocaVisibility() {
       input.value = '';
     });
   }
-  validateForm();
 }
-
-function validateForm() {
-  let requiredCount = baseInputs.length;
-  let filled = 0;
-  
-  baseInputs.forEach(input => {
-    if (input.value.trim() !== '') filled++;
-  });
-
-  if (tipoTermoDropdown.value === 'Devolução') {
-    requiredCount++;
-    if (nomeTecnicoInput.value.trim() !== '') filled++;
-    
-    if (checkTroca.checked) {
-      requiredCount += baseInputsNovo.length;
-      baseInputsNovo.forEach(input => {
-        if (input.value.trim() !== '') filled++;
-      });
-    }
-  }
-  
-  if (filled === requiredCount) {
-    statusAlert.classList.add('ready');
-    statusAlert.classList.remove('warning');
-    statusText.textContent = "Todos os campos preenchidos! Pronto para gerar.";
-  } else {
-    statusAlert.classList.remove('ready');
-    statusText.textContent = `Preencha todos os campos para gerar. (${filled}/${requiredCount} preenchidos)`;
-  }
-}
-
-// Add event listeners para tempo real
-baseInputs.forEach(input => {
-  input.addEventListener('input', validateForm);
-});
-baseInputsNovo.forEach(input => {
-  input.addEventListener('input', validateForm);
-});
-nomeTecnicoInput.addEventListener('input', validateForm);
-validateForm();
 
 
 // --- Lógica de Geração do Documento ---
@@ -216,7 +173,6 @@ async function generateDocx(event) {
     form.reset();
     updateTrocaVisibility();
     
-    validateForm();
     successMessage.classList.remove('hidden');
     setTimeout(() => successMessage.classList.add('hidden'), 5000);
 
