@@ -2,8 +2,6 @@ import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import { saveAs } from 'file-saver';
 
-// --- Estado do Histórico ---
-let historyRecords = [];
 
 // --- Mapeamento de Meses ---
 const MESES_PT = [
@@ -29,9 +27,6 @@ const tipoTermoDropdown = document.getElementById('tipoTermo');
 const nomeTecnicoContainer = document.getElementById('nomeTecnicoContainer');
 const nomeTecnicoInput = document.getElementById('nomeTecnico');
 
-// Histórico UI
-const historyPanel = document.getElementById('historyPanel');
-const historyList = document.getElementById('historyList');
 
 // Buscar todos os inputs do tipo text, exceto o do técnico
 const baseInputs = Array.from(form.querySelectorAll('input[type="text"]:not(#nomeTecnico)'));
@@ -79,59 +74,6 @@ baseInputs.forEach(input => {
 nomeTecnicoInput.addEventListener('input', validateForm);
 validateForm();
 
-// --- Buscar Histórico Global da API ---
-async function fetchGlobalHistory() {
-  try {
-    const res = await fetch('/api/history');
-    if (res.ok) {
-      historyRecords = await res.json();
-      updateHistoryUI();
-    }
-  } catch (err) {
-    console.error("Falha ao buscar histórico do servidor", err);
-  }
-}
-
-// Iniciar a busca ao abrir a página
-fetchGlobalHistory();
-
-// --- Função para Renderizar o Histórico ---
-function updateHistoryUI() {
-  if (historyRecords.length > 0) {
-    historyPanel.style.display = 'block';
-  }
-  
-  historyList.innerHTML = '';
-  // Mostrar em ordem reversa (mais recente primeiro)
-  const sortedRecords = [...historyRecords].reverse();
-  
-  sortedRecords.forEach(record => {
-    const card = document.createElement('div');
-    card.className = 'history-card';
-    
-    // Formatar classe do badge dependendo do tipo
-    const badgeClass = record.tipo === 'Entrega' ? 'entrega' : 'devolucao';
-    
-    let htmlContent = `
-      <div class="card-badge ${badgeClass}">${record.tipo}</div>
-      <p><strong>Nome:</strong> ${record.nome}</p>
-      <p><strong>Matrícula:</strong> ${record.matricula}</p>
-      <p><strong>Modelo:</strong> ${record.modelo}</p>
-      <p><strong>Cód. Interno:</strong> ${record.codigo_interno}</p>
-      <p><strong>Núm. Série:</strong> ${record.numero_serie}</p>
-      <p><strong>Patrimônio:</strong> ${record.patrimonio}</p>
-    `;
-    
-    if (record.nome_tecnico) {
-      htmlContent += `<p><strong>Técnico:</strong> ${record.nome_tecnico}</p>`;
-    }
-    
-    htmlContent += `<p style="font-size: 0.8rem; margin-top: 10px; color: rgba(255,255,255,0.4)">Gerado em: ${record.time}</p>`;
-    
-    card.innerHTML = htmlContent;
-    historyList.appendChild(card);
-  });
-}
 
 // --- Lógica de Geração do Documento ---
 async function generateDocx(event) {
@@ -168,8 +110,7 @@ async function generateDocx(event) {
     const zip = new PizZip(arrayBuffer);
     const doc = new Docxtemplater(zip, {
       paragraphLoop: true,
-      linebreaks: true,
-      delimiters: { start: '<', end: '>' }
+      linebreaks: true
     });
 
     doc.render(formData);
@@ -186,34 +127,8 @@ async function generateDocx(event) {
     // Fazer download
     saveAs(out, outputName);
 
-    // Salvar no Histórico (agora envia para o backend)
-    const record = {
-      tipo: tipo,
-      nome: formData.NOME,
-      matricula: formData.MATRICULA,
-      modelo: formData.MODELO,
-      codigo_interno: formData.CODIGO_INTERNO,
-      numero_serie: formData.NUMERO_SERIE,
-      patrimonio: formData.PATRIMONIO,
-      nome_tecnico: formData.NOME_TECNICO,
-      time: new Date().toLocaleTimeString('pt-BR')
-    };
 
-    try {
-      await fetch('/api/history', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(record)
-      });
-      fetchGlobalHistory(); // Atualiza a tela a partir do servidor
-    } catch(err) {
-      console.warn("API indisponível, usando fallback local.");
-      historyRecords.push(record);
-      if (historyRecords.length > 6) historyRecords = historyRecords.slice(-6);
-      updateHistoryUI();
-    }
-
-    // Sucesso - Limpar Form, atualizar validação e renderizar card history
+    // Sucesso - Limpar Form, atualizar validação
     form.reset();
     
     if (tipoTermoDropdown.value !== 'Devolução') {
@@ -222,9 +137,8 @@ async function generateDocx(event) {
     }
     
     validateForm();
-    updateHistoryUI();
-    
     successMessage.classList.remove('hidden');
+    setTimeout(() => successMessage.classList.add('hidden'), 5000);
 
   } catch (error) {
     alert(`ERRO: ${error.message}\nCertifique-se de que o arquivo docx está na pasta /public.`);
