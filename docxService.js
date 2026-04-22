@@ -2,10 +2,18 @@ import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 import { saveAs } from 'file-saver';
 
+// Armazena na memória RAM para evitar downloads repetitivos
+const templateCache = {};
+
 /**
- * Processa um único documento docx, injetando os dados e baixando para o usuário.
+ * Baixa o template ou pega do cache em memória
  */
-async function processSingleDoc(arquivoTemplate, dadosFormulario, sufixoNome, acessoriosSelecionados = []) {
+async function getTemplateBuffer(arquivoTemplate) {
+  if (templateCache[arquivoTemplate]) {
+    // Retorna uma cópia do buffer para não corromper o cache nas edições
+    return templateCache[arquivoTemplate].slice(0);
+  }
+
   const response = await fetch(`/${arquivoTemplate}?v=${new Date().getTime()}`);
   if (!response.ok) {
     throw new Error(`Não foi possível carregar o modelo '${arquivoTemplate}'.`);
@@ -13,29 +21,75 @@ async function processSingleDoc(arquivoTemplate, dadosFormulario, sufixoNome, ac
 
   const blob = await response.blob();
   const arrayBuffer = await blob.arrayBuffer();
+  
+  templateCache[arquivoTemplate] = arrayBuffer;
+  return arrayBuffer.slice(0);
+}
+
+/**
+ * Processa um único documento docx, injetando os dados e baixando para o usuário.
+ */
+async function processSingleDoc(arquivoTemplate, dadosFormulario, sufixoNome, acessoriosSelecionados = []) {
+  const arrayBuffer = await getTemplateBuffer(arquivoTemplate);
 
   const zip = new PizZip(arrayBuffer);
 
-  // Manipulação bruta do XML para injeção de marcadores nativos do Word
-  let xml = zip.file("word/document.xml").asText();
-  xml = xml.replace('{ACESSORIOS}', '');
+  // Manipulação Cirúrgica e Segura do XML usando DOMParser
+  let xmlStr = zip.file("word/document.xml").asText();
+  xmlStr = xmlStr.replace('{ACESSORIOS}', '');
 
   if (arquivoTemplate === 'entrega.docx' && acessoriosSelecionados.length > 0) {
-    const bulletTemplate = '<w:p><w:pPr><w:pStyle w:val="Standarduser"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="15"/></w:numPr><w:rPr><w:color w:val="000000"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr></w:pPr><w:r><w:rPr><w:color w:val="000000"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr><w:t>REPLACE_TEXTO</w:t></w:r></w:p>';
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlStr, "application/xml");
     
-    let extraBullets = '';
-    acessoriosSelecionados.forEach(acc => {
-       extraBullets += bulletTemplate.replace('REPLACE_TEXTO', acc);
-    });
+    // Busca todas as tags de texto (<w:t>)
+    const textNodes = xmlDoc.getElementsByTagName("w:t");
+    let targetNode = null;
     
-    const fonteIndex = xml.indexOf('<w:t>Fonte</w:t>');
-    if (fonteIndex !== -1) {
-        const pEndIndex = xml.indexOf('</w:p>', fonteIndex) + 6;
-        xml = xml.slice(0, pEndIndex) + extraBullets + xml.slice(pEndIndex);
+    for (let i = 0; i < textNodes.length; i++) {
+      if (textNodes[i].textContent === 'Fonte') {
+        targetNode = textNodes[i];
+        break;
+      }
     }
+
+    if (targetNode) {
+      // Subir na hierarquia até achar o parágrafo pai (<w:p>)
+      let pNode = targetNode.parentNode;
+      while (pNode && pNode.nodeName !== 'w:p') {
+        pNode = pNode.parentNode;
+      }
+
+      if (pNode && pNode.parentNode) {
+        const parentContainer = pNode.parentNode;
+        
+        acessoriosSelecionados.forEach(acc => {
+           // Monta o XML do novo bullet point (garantindo os namespaces necessários no parsing isolado)
+           const bulletTemplateStr = `<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:pPr><w:pStyle w:val="Standarduser"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="15"/></w:numPr><w:rPr><w:color w:val="000000"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr></w:pPr><w:r><w:rPr><w:color w:val="000000"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr><w:t>${acc}</w:t></w:r></w:p>`;
+           
+           const bulletDoc = parser.parseFromString(bulletTemplateStr, "application/xml");
+           const importedNode = xmlDoc.importNode(bulletDoc.documentElement, true);
+           
+           // Insere o novo bullet point cirurgicamente logo APÓS o parágrafo da 'Fonte'
+           parentContainer.insertBefore(importedNode, pNode.nextSibling);
+           
+           // Avança o cursor para injetar o próximo logo abaixo deste
+           pNode = importedNode;
+        });
+      }
+    }
+    
+    const serializer = new XMLSerializer();
+    let serialized = serializer.serializeToString(xmlDoc);
+    
+    // Garante que a declaração XML não seja perdida no parser
+    if (!serialized.startsWith("<?xml")) {
+      serialized = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + serialized;
+    }
+    xmlStr = serialized;
   }
   
-  zip.file("word/document.xml", xml);
+  zip.file("word/document.xml", xmlStr);
 
   const doc = new Docxtemplater(zip, {
     paragraphLoop: true,
